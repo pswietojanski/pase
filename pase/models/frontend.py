@@ -4,6 +4,7 @@ import torch.nn as nn
 import json
 from .aspp import aspp_resblock
 from .tdnn import TDNN
+from .fftnet import FFTNet
 from pase.models.WorkerScheduler.encoder import encoder
 import torchvision.models as models
 try:
@@ -441,5 +442,75 @@ class Resnet50_encoder(Model):
             return h
 
 
+class FFTNetFe(Model):
+    """ 
+    """
+    def __init__(self, num_inputs=1,
+                 sincnet=True,
+                 kwidth=641, stride=160,
+                 fmaps=128, norm_type='bnorm',
+                 pad_mode='reflect',
+                 sr=16000, emb_dim=256,
+                 activation=None,
+                 rnn_pool=False,
+                 rnn_layers=1,
+                 rnn_dropout=0,
+                 rnn_type='qrnn',
+                 name='FFTNetFe'):
+        super().__init__(name=name) 
+        # apply sincnet at first layer
+        self.sincnet = sincnet
+        self.emb_dim = emb_dim
+        ninp = num_inputs
+        if self.sincnet:
+            self.feblock = FeBlock(ninp, fmaps, kwidth, stride,
+                                   1, act=activation,
+                                   pad_mode=pad_mode,
+                                   norm_type=norm_type,
+                                   sincnet=True,
+                                   sr=sr)
+            ninp = fmaps
+        self.fftnet = FFTNet(ninp)
+        fmap = self.tdnn.quantization_channels
+        # last projection
+        if rnn_pool:
+            self.rnn = build_rnn_block(fmap, emb_dim // 2,
+                                       rnn_layers=rnn_layers,
+                                       rnn_type=rnn_type,
+                                       bidirectional=True,
+                                       dropout=rnn_dropout)
+            self.W = nn.Conv1d(emb_dim, emb_dim, 1)
+        else:
+            self.W = nn.Conv1d(fmap, emb_dim, 1)
+        self.rnn_pool = rnn_pool
+
+    def forward(self, batch, device=None):
+
+        if type(batch) == dict:
+            x = torch.cat((batch['chunk'],
+                           batch['chunk_ctxt'],
+                           batch['chunk_rand']),
+                          dim=0).to(device)
+        else:
+            x = batch
+        if hasattr(self, 'feblock'): 
+            h = self.feblock(x)
+        
+        h = self.fftnet(h, h=None)
+
+        if self.rnn_pool:
+            h = h.transpose(1, 2).transpose(0, 1)
+            h, _ = self.rnn(h)
+            h = h.transpose(0, 1).transpose(1, 2)
+
+        y = self.W(h)
+
+        if type(batch) == dict:
+            embedding = torch.chunk(y, 3, dim=0)
+
+            chunk = embedding[0]
+            return embedding, chunk
+        else:
+            return y
 
 
