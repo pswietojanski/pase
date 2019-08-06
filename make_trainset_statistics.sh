@@ -3,9 +3,10 @@
 libri=false
 swbd=false
 ami=false
-libri_ami=false
+libri_ami_ihm=false
 libri_ami_sdm=false
-libri_ami_swbd=true
+libri_ami_swbd=false
+libri_ami_ihm_sdm=true
 
 $libri && {
 
@@ -52,6 +53,21 @@ $libri_ami_swbd && {
     --data_cfg data/LibriSpeech_50h/librispeech_data_50h.cfg \
     --dataset PairWavDataset \
     --data_root data/ami \
+    --data_cfg data/ami_data_ihm_sdm1357.cfg \
+    --dataset AmiSegTupleWavDataset \
+    --data_root . \
+    --data_cfg data/swbd1_30k.cfg \
+    --dataset PairWavDataset \
+    --out_file data/libri_ami_swbd_stats.pkl
+}
+
+$libir_ami_swbd && {
+   python make_trainset_statistics.py \
+    --num_workers 5 --max_batches 50 \
+    --data_root data/LibriSpeech_50h/wav_sel \
+    --data_cfg data/LibriSpeech_50h/librispeech_data_50h.cfg \
+    --dataset PairWavDataset \
+    --data_root /tmp-corpora/ami \
     --data_cfg data/ami_data_ihm_sdm1357.cfg \
     --dataset AmiSegTupleWavDataset \
     --data_root . \

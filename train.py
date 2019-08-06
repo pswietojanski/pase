@@ -1,4 +1,8 @@
 # from pase.models.core import Waveminionet
+
+import warnings
+warnings.filterwarnings("ignore", category=UserWarning)
+
 import librosa
 from pase.models.modules import VQEMA
 from pase.dataset import PairWavDataset, DictCollater, MetaWavConcatDataset
@@ -17,7 +21,10 @@ import argparse
 import os
 import json
 import random
+
 torch.backends.cudnn.benchmark = True
+if not torch.backends.cudnn.enabled:
+    raise ValueError()
 
 
 def str2bool(v):
