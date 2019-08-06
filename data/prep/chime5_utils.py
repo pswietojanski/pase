@@ -12,57 +12,103 @@ import multiprocessing
 import tqdm
 from kaldi_data_dir import KaldiDataDir
 
-#these are global functions, as we use them in Pool workers later si
-#must be pickable
+#these are global functions, as we use them in Pool workers later so
+#must be pickable at any level
 def get_wav_and_chan(path):
+    #check if raw file, or smth like, in which case we need path and chan
     #sox /export/corpora/CHiME5/audio/train/S03_P09.wav -t wav - remix 1 |
     if re.match(r'.*\|', path):
         #we play with pipe, extract wav and channel
-        r = re.search(r'.*\s(.*\.wav)\s.*remix\s([1|2]).*', path)
+        r = re.search(r'.*\s(.*\.wav)\s.*remix\s([1-9]).*', path)
         if r:
             return r.group(1), int(r.group(2))-1
         return None, None
     return path, None
 
-def process_segment(filein, fileout, beg, end):
+def process_segment(filein, fileout, beg, end, sigin=None, fs=None):
     #print ("Processing {} to {} for seg ({},{})".format(filein, fileout, beg, end))
     #return True
+    if sigin is not None:
+        assert fs is not None, (
+            "Passed signal as array, but not specified sampling rate (fs)"
+        )
     if not os.path.exists(filein):
         return False
     path, chan = get_wav_and_chan(filein)
-    assert path is not None, (
-        "File {} cannot be parsed".format(path)
-    )
-    sigin, fs = sf.read(path)
+    if path is None:
+        print ("File {} cannot be parsed".format(path))
+        return False
+
+    if sigin is None:
+        sigin, fs = sf.read(path)
+    
     beg_i, end_i = beg*fs, end*fs
+    if beg_i >= end_i or end_i > sigin.shape[0]:
+        print ("Cant extract segment {} - {}, as wav {} is {} "\
+            .format(beg_i, end_i, filein, sigin.shape[0]))
+        return False
+
     if chan is not None:
-        assert sigin.ndim > 1 and sigin.shape[1] <= chan, (
-            "File {} has not {} chan present".format(filein, chan)
-        )
+        if sigin.ndim > 1 and sigin.shape[1] <= chan:
+            print ("File {} has not {} chan present".format(filein, chan))
+            return False
         sigout = sigin[beg_i:end_i, chan]
     else:
         sigout = sigin[beg_i:end_i]
     sf.write(fileout, sigout, fs)
     return True
 
-def pool_worker(sess):
+def pool_segment_worker(sess):
     sessid, utts = sess
     tot_success = 0
     for utt in utts:
         uttid, e = utt
-        r = process_segment(e['file_in'], e['file_out'], e['seg_beg'], e['seg_end'])
+        r = process_segment(filein=e['file_in'],
+                             fileout=e['file_out'],
+                             beg=e['seg_beg'], 
+                             end=e['seg_end'])
+        if r: tot_success += 1
+        #print ("Processed {} from {} success: {}".format(uttid, sessid, r))
+    return tot_success
+
+def pool_recording_worker(sess):
+    sessid, utts = sess
+    tot_success = 0
+    sigin, fs, sessfile = None, None, None
+    #for each utterance in sessid file (one large file)
+    for utt in utts:
+        uttid, e = utt
+        filein = e['file_in'] 
+        fileout = e['file_out']
+        beg = e['seg_beg']
+        end = e['seg_end']
+
+        #preload the recording once at first request
+        if sigin is None:
+            sessfile, _ = get_wav_and_chan(filein)
+            sigin, fs = sf.read(sessfile)
+        else:
+            path, _ = get_wav_and_chan(filein)
+            assert path == sessfile, (
+                "Expected segments share same source wav file {} in session {},"\
+                  "but got {} for utt {}".format(sessfile, sessid, path, uttid)
+            ) 
+        r = process_segment(filein=filein, fileout=fileout, 
+                             beg=beg, end=end, 
+                             sigin=sigin, fs=fs)
         if r: tot_success += 1
         #print ("Processed {} from {} success: {}".format(uttid, sessid, r))
     return tot_success
 
 class PasePrep4Chime5(object):
-    def __init__(self, out_dir, ihm_dir, sdm_dir=None):
+    def __init__(self, out_dir, ihm_dir, sdm_dir=None, num_workers=5):
         self.out_dir = out_dir
         self.name = ihm_dir
         self.ihm = KaldiDataDir(ihm_dir)
         self.sdm = None
         if sdm_dir is not None:
             self.sdm = KaldiDataDir(sdm_dir)
+        self.num_workers = num_workers
 
     def show_stats(self):
         print ("Stats for {}".format(self.name))
@@ -277,11 +323,11 @@ class PasePrep4Chime5(object):
     def segment_audio(self, audio_info):
           
         #we want to order by recording, so each one gets loaded only once
-        pool = multiprocessing.Pool(processes=4)
+        pool = multiprocessing.Pool(processes=self.num_workers)
         sessions = [(k,v) for k,v in audio_info['ihm'].items()]
         print ("Processing IHM sessions....")
         tot_success=0
-        for f in tqdm.tqdm(pool.imap(pool_worker, sessions), 
+        for f in tqdm.tqdm(pool.imap(pool_recording_worker, sessions), 
                                          total=len(sessions)):
             tot_success += f
             #print ('F ', f)
@@ -290,7 +336,7 @@ class PasePrep4Chime5(object):
         sessions = [(k,v) for k,v in audio_info['sdm'].items()]
         print ("Processing SDM sessions....")
         tot_success=0
-        for f in tqdm.tqdm(pool.imap(pool_worker, sessions),
+        for f in tqdm.tqdm(pool.imap(pool_recording_worker, sessions),
                                 total=len(sessions)):
             tot_success += f
             #print ('F ', f)
