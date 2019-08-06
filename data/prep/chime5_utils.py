@@ -10,6 +10,7 @@ import numpy
 import soundfile as sf
 import multiprocessing
 import tqdm
+import json
 from kaldi_data_dir import KaldiDataDir
 
 #these are global functions, as we use them in Pool workers later so
@@ -102,6 +103,9 @@ def pool_recording_worker(sess):
 
 class PasePrep4Chime5(object):
     def __init__(self, out_dir, ihm_dir, sdm_dir=None, num_workers=5):
+        assert os.path.exists(out_dir), (
+            "Out dir {} expected to exists".format(out_dir)
+        )
         self.out_dir = out_dir
         self.name = ihm_dir
         self.ihm = KaldiDataDir(ihm_dir)
@@ -286,14 +290,16 @@ class PasePrep4Chime5(object):
                 path_sdm = self.sdm.utt2wav_[reco_sdm]
 
                 out_ihm_file = "{}_{}-{}.wav".format(spk, reco_ihm, idx)
+                out_ihm_path = os.path.join(self.out_dir, out_ihm_file)
                 out_sdm_file = "{}_{}-{}.wav".format(spk, reco_sdm, idx)
+                out_sdm_path = os.path.join(self.out_dir, out_sdm_file)
 
                 audio_entry_ihm = {'file_in':path_ihm, 
-                                   'file_out': out_ihm_file,
+                                   'file_out': out_ihm_path,
                                    'seg_beg': beg_ihm,
                                    'seg_end': end_ihm}
                 audio_entry_sdm = {'file_in': path_sdm,
-                                   'file_out': out_sdm_file,
+                                   'file_out': out_sdm_path,
                                    'seg_beg': beg_sdm,
                                    'seg_end': end_sdm}
 
@@ -349,7 +355,7 @@ if __name__ == "__main__":
     #d.get_segments_per_spk()
     #d.get_worn_u100k_overlap()
 
-    out_dir='/tmp-copora/'
+    out_dir='/tmp-copora/chime5segmented'
     train_worn='/mnt/c/work/repos/pase/data_splits/train_worn_stereo'
     train_dist='/mnt/c/work/repos/pase/data_splits/train_uall'
     d = PasePrep4Chime5(out_dir, train_worn, train_dist)
@@ -362,6 +368,10 @@ if __name__ == "__main__":
         spk2chunks = numpy.load('spk2chunks.npy', allow_pickle=True)
 
     data_cfg, audio_info  = d.to_data_cfg(spk2chunks)
+    
+    with open("data/chime5_seg_mathched.cfg", 'w') as cfg_f:
+        cfg_f.write(json.dumps(data_cfg))
+
     d.segment_audio(audio_info)
 
     #train_u100k='/mnt/c/work/repos/pase/data_splits/train_u100k'
