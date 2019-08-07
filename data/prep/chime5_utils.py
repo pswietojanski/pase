@@ -100,7 +100,7 @@ def pool_recording_worker(sess):
                              beg=beg, end=end, 
                              sigin=sigin, fs=fs)
         if r: tot_success += 1
-        #print ("Processed {} from {} success: {}".format(uttid, sessid, r))
+        print ("Processed {} from {} success: {}".format(uttid, sessid, r))
     return tot_success
 
 class PasePrep4Chime5(object):
@@ -211,12 +211,12 @@ class PasePrep4Chime5(object):
                    .format(skipped_length_ihms, skipped_doubles, len(ihm_utts), len(text2utt_ihm)))
 
         text2utt_sdm = {}
-        skipped_length_ihms = 0
+        skipped_length_sdms = 0
         skipped_doubles = 0
         for utt in sdm_utts:
             txt = self.sdm.utt2text_[utt]
             if len(txt.split(" ")) < min_words_per_seg:
-                skipped_length_ihms += 1
+                skipped_length_sdms += 1
                 continue
             newid = mk_txt_id(txt, utt)
             if newid in text2utt_sdm:
@@ -225,7 +225,7 @@ class PasePrep4Chime5(object):
             text2utt_sdm[newid] = utt
 
         print ("For SDM, skipped {} too short and {} segs (out of {}). Left {}"\
-                   .format(skipped_length_ihms, skipped_doubles, len(sdm_utts), len(text2utt_sdm)))
+                   .format(skipped_length_sdms, skipped_doubles, len(sdm_utts), len(text2utt_sdm)))
 
         u1, u2 = set(text2utt_ihm.keys()), set(text2utt_sdm.keys())
         utts_joint = u1 & u2
