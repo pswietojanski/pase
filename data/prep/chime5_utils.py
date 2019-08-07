@@ -264,11 +264,14 @@ class PasePrep4Chime5(object):
     def to_data_cfg(self, spk2chunks):
 
         data_cfg = {'train':{'data':[],
-                         'speakers':[]},
+                         'speakers':[],
+                         'total_wav_dur':0},
                     'valid':{'data':[],
-                         'speakers':[]},
+                         'speakers':[],
+                         'total_wav_dur':0},
                     'test':{'data':[],
-                        'speakers':[]},
+                        'speakers':[],
+                        'total_wav_dur':0},
                     'speakers':[]}
 
         audio_info = {'ihm':{}, 'sdm':{}}
@@ -325,6 +328,8 @@ class PasePrep4Chime5(object):
                 data_cfg[dset]['data'].append(entry)
                 if spk not in data_cfg[dset]['speakers']:
                     data_cfg[dset]['speakers'].append(spk)
+                
+                data_cfg[dset]['total_wav_dur'] += (end_ihm-beg_ihm)*16000
 
         return data_cfg, audio_info
 
@@ -365,18 +370,18 @@ if __name__ == "__main__":
     d = PasePrep4Chime5(out_dir, train_worn, train_dist, num_workers=3)
     d.show_stats()
     #d.get_segments_per_spk()
-    if not os.path.exists('spk2chunks.npy'):
-        spk2chunks = d.get_Us_for_worn_text()
-        numpy.save('spk2chunks.npy', spk2chunks)
-    else:
-        spk2chunks = numpy.load('spk2chunks.npy', allow_pickle=True)
+    #if not os.path.exists('spk2chunks.npy'):
+    #    spk2chunks = d.get_Us_for_worn_text()
+    #    numpy.save('spk2chunks.npy', spk2chunks)
+    #else:
+    #    spk2chunks = numpy.load('spk2chunks.npy', allow_pickle=True)
 
     data_cfg, audio_info  = d.to_data_cfg(spk2chunks)
     
     with open("chime5_seg_mathched.cfg", 'w') as cfg_f:
         cfg_f.write(json.dumps(data_cfg))
 
-    d.segment_audio(audio_info)
+    #d.segment_audio(audio_info)
 
     #train_u100k='/mnt/c/work/repos/pase/data_splits/train_u100k'
     #d = PasePrep4Chime5(train_u100k)
