@@ -45,7 +45,7 @@ def process_segment(filein, fileout, beg, end, sigin=None, fs=None):
     if sigin is None:
         sigin, fs = sf.read(path)
     
-    beg_i, end_i = beg*fs, end*fs
+    beg_i, end_i = int(beg*fs), int(end*fs)
     if beg_i >= end_i or end_i > sigin.shape[0]:
         print ("Cant extract segment {} - {}, as wav {} is {} "\
             .format(beg_i, end_i, filein, sigin.shape[0]))
@@ -362,7 +362,7 @@ if __name__ == "__main__":
     #train_dist='/mnt/c/work/repos/pase/data_splits/train_uall'
     train_worn='/disks/data1/pawel/repos/kaldi/egs/chime5/s5/data/train_worn_stereo'
     train_dist='/disks/data1/pawel/repos/kaldi/egs/chime5/s5/data/train_uall'
-    d = PasePrep4Chime5(out_dir, train_worn, train_dist, num_workers=1)
+    d = PasePrep4Chime5(out_dir, train_worn, train_dist, num_workers=3)
     d.show_stats()
     #d.get_segments_per_spk()
     if not os.path.exists('spk2chunks.npy'):
