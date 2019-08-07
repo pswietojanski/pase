@@ -185,8 +185,8 @@ class PasePrep4Chime5(object):
             ps = utt.split("_")
             return "{}_{} {}".format(ps[0], ps[1], text)
 
-        ihm_utts = self.ihm.utt2text_.keys()
-        sdm_utts = self.sdm.utt2text_.keys()
+        ihm_utts = list(self.ihm.utt2text_.keys())
+        sdm_utts = list(self.sdm.utt2text_.keys())
 
         random.shuffle(ihm_utts)
         random.shuffle(sdm_utts)
@@ -356,21 +356,23 @@ if __name__ == "__main__":
     #d.get_segments_per_spk()
     #d.get_worn_u100k_overlap()
 
-    out_dir='/tmp-copora/chime5segmented'
-    train_worn='/mnt/c/work/repos/pase/data_splits/train_worn_stereo'
-    train_dist='/mnt/c/work/repos/pase/data_splits/train_uall'
-    d = PasePrep4Chime5(out_dir, train_worn, train_dist)
+    out_dir='/tmp-corpora/chime5segmented'
+    #train_worn='/mnt/c/work/repos/pase/data_splits/train_worn_stereo'
+    #train_dist='/mnt/c/work/repos/pase/data_splits/train_uall'
+    train_worn='/disks/data1/pawel/repos/kaldi/egs/chime5/s5/data/train_worn_stereo'
+    train_dist='/disks/data1/pawel/repos/kaldi/egs/chime5/s5/data/train_uall'
+    d = PasePrep4Chime5(out_dir, train_worn, train_dist, num_workers=1)
     d.show_stats()
     #d.get_segments_per_spk()
     if not os.path.exists('spk2chunks.npy'):
         spk2chunks = d.get_Us_for_worn_text()
-        numpy.save('spk2chunks.pkl', spk2chunks)
+        numpy.save('spk2chunks.npy', spk2chunks)
     else:
         spk2chunks = numpy.load('spk2chunks.npy', allow_pickle=True)
 
     data_cfg, audio_info  = d.to_data_cfg(spk2chunks)
     
-    with open("data/chime5_seg_mathched.cfg", 'w') as cfg_f:
+    with open("chime5_seg_mathched.cfg", 'w') as cfg_f:
         cfg_f.write(json.dumps(data_cfg))
 
     d.segment_audio(audio_info)
