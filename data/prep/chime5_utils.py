@@ -370,6 +370,7 @@ if __name__ == "__main__":
     d = PasePrep4Chime5(out_dir, train_worn, train_dist, num_workers=3)
     d.show_stats()
     #d.get_segments_per_spk()
+    spk2chunks = d.get_Us_for_worn_text()
     #if not os.path.exists('spk2chunks.npy'):
     #    spk2chunks = d.get_Us_for_worn_text()
     #    numpy.save('spk2chunks.npy', spk2chunks)
