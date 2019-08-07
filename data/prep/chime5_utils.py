@@ -97,10 +97,14 @@ def pool_recording_worker(sess):
                   "but got {} for utt {}".format(sessfile, sessid, path, uttid)
             ) 
         r = process_segment(filein=filein, fileout=fileout, 
-                             beg=beg, end=end, 
-                             sigin=sigin, fs=fs)
-        if r: tot_success += 1
-        print ("Processed {} from {} success: {}".format(uttid, sessid, r))
+                       beg=beg, end=end, 
+                       sigin=sigin, fs=fs)
+        #r = True
+        if r:
+            tot_success += 1
+            #print ("Proc utt {} (sess {}). From {} to {} into {}".format(uttid, sessid, beg, end, fileout))
+        else:
+            print ("Failed to process utt {} (sess {})".format(utt, sessid))
     return tot_success
 
 class PasePrep4Chime5(object):
@@ -115,6 +119,7 @@ class PasePrep4Chime5(object):
         if sdm_dir is not None:
             self.sdm = KaldiDataDir(sdm_dir)
         self.num_workers = num_workers
+        self.fs = 160000
 
     def show_stats(self):
         print ("Stats for {}".format(self.name))
@@ -279,14 +284,15 @@ class PasePrep4Chime5(object):
         valid = 'P42'
         test = 'P41'
 
+        tot_files = 0
         for spk in sorted(spk2chunks.keys()):
             ihm_utts = spk2chunks[spk]['ihm']
             sdm_utts = spk2chunks[spk]['sdm']
             print ("Processing spk {} with {} segs".format(spk, len(ihm_utts)))
             for idx, paths in enumerate(zip(ihm_utts, sdm_utts)):
-                
+                #print ("Processing idx {} and paths {}".format(idx, paths))
                 org_utt_ihm = paths[0]
-                org_utt_sdm = paths[1] 
+                org_utt_sdm = paths[1]
 
                 reco_ihm, beg_ihm, end_ihm = self.ihm.utt2segments_[org_utt_ihm]
                 reco_sdm, beg_sdm, end_sdm = self.sdm.utt2segments_[org_utt_sdm]
@@ -294,12 +300,16 @@ class PasePrep4Chime5(object):
                 path_ihm = self.ihm.utt2wav_[reco_ihm]
                 path_sdm = self.sdm.utt2wav_[reco_sdm]
 
-                out_ihm_file = "{}_{}-{}.wav".format(spk, reco_ihm, idx)
+                #out_ihm_file = "{}_{}-{}.wav".format(spk, reco_ihm, idx)
+                out_ihm_file = "{}-{}.wav".format(spk, idx)
                 out_ihm_path = os.path.join(self.out_dir, out_ihm_file)
-                out_sdm_file = "{}_{}-{}.wav".format(spk, reco_sdm, idx)
+                #out_sdm_file = "{}_{}-{}.wav".format(spk, reco_sdm, idx)
+                out_sdm_file = "{}-{}.wav".format(spk, idx)
                 out_sdm_path = os.path.join(self.out_dir, out_sdm_file)
 
-                audio_entry_ihm = {'file_in':path_ihm, 
+                #print ("Proc {} paths {} out_path {}, reco {}".format(idx, paths, out_ihm_file, reco_ihm))
+
+                audio_entry_ihm = {'file_in':path_ihm,
                                    'file_out': out_ihm_path,
                                    'seg_beg': beg_ihm,
                                    'seg_end': end_ihm}
@@ -322,19 +332,24 @@ class PasePrep4Chime5(object):
                 elif spk in test:
                     dset = 'test'
 
-                entry={'filename': out_ihm_file, 
+                entry={'filename': out_ihm_file,
                        '1': out_sdm_file,
                        'spk': spk}
                 data_cfg[dset]['data'].append(entry)
                 if spk not in data_cfg[dset]['speakers']:
                     data_cfg[dset]['speakers'].append(spk)
-                
-                data_cfg[dset]['total_wav_dur'] += (end_ihm-beg_ihm)*16000
+
+                data_cfg[dset]['total_wav_dur'] += (end_ihm-beg_ihm)*self.fs
+
+                tot_files += 1
+
+        print ("Data cfg contains {} files in total".format(tot_files))
+        print ("Tot training length is {} hours".format(data_cfg['train']['total_wav_dur']/self.fs/3600))
 
         return data_cfg, audio_info
 
     def segment_audio(self, audio_info):
-          
+
         #we want to order by recording, so each one gets loaded only once
         pool = multiprocessing.Pool(processes=self.num_workers)
         sessions = [(k,v) for k,v in audio_info['ihm'].items()]
@@ -367,7 +382,7 @@ if __name__ == "__main__":
     #train_dist='/mnt/c/work/repos/pase/data_splits/train_uall'
     train_worn='/disks/data1/pawel/repos/kaldi/egs/chime5/s5/data/train_worn_stereo'
     train_dist='/disks/data1/pawel/repos/kaldi/egs/chime5/s5/data/train_uall'
-    d = PasePrep4Chime5(out_dir, train_worn, train_dist, num_workers=3)
+    d = PasePrep4Chime5(out_dir, train_worn, train_dist, num_workers=5)
     d.show_stats()
     #d.get_segments_per_spk()
     spk2chunks = d.get_Us_for_worn_text()
@@ -378,11 +393,20 @@ if __name__ == "__main__":
     #    spk2chunks = numpy.load('spk2chunks.npy', allow_pickle=True)
 
     data_cfg, audio_info  = d.to_data_cfg(spk2chunks)
-    
+
+    #sess = audio_info['sdm'].items()
+    #for s in sess:
+    #    sessid, utts = s
+    #    for utt in utts:
+    #        uttid, e = utt
+    #        filein = e['file_in']
+    #        fileout = e['file_out']
+    #        print ("Uttid {}, sess {}, fileout {}".format(uttid, sessid, fileout))
+
     with open("chime5_seg_mathched.cfg", 'w') as cfg_f:
         cfg_f.write(json.dumps(data_cfg))
 
-    #d.segment_audio(audio_info)
+    d.segment_audio(audio_info)
 
     #train_u100k='/mnt/c/work/repos/pase/data_splits/train_u100k'
     #d = PasePrep4Chime5(train_u100k)
