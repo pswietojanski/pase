@@ -34,6 +34,7 @@ def process_segment(filein, fileout, beg, end, sigin=None, fs=None):
             "Passed signal as array, but not specified sampling rate (fs)"
         )
     if not os.path.exists(filein):
+        print ("File {} not found".format(filein))
         return False
     path, chan = get_wav_and_chan(filein)
     if path is None:
